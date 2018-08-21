@@ -29,10 +29,6 @@ contract SecurityToken is ISecurityToken, ReentrancyGuard, RegistryUpdater {
     // Reference to token burner contract
     ITokenBurner public tokenBurner;
 
-    // Allows the issuer to force transfers in the event of a court order
-    bool public allowsForcedTransfers = false;
-    address public forcedTransferReceiver;
-
     // Use to halt all the transactions
     bool public freeze = false;
 
@@ -91,8 +87,6 @@ contract SecurityToken is ISecurityToken, ReentrancyGuard, RegistryUpdater {
     event LogFinishMintingSTO(uint256 _timestamp);
     // Change the STR address in the event of a upgrade
     event LogChangeSTRAddress(address indexed _oldAddress, address indexed _newAddress);
-    // Forced transfer executed
-    event LogForcedTransfer(address _from, address _receiver, uint256 _amount, bytes32 _data);
 
     // If _fallback is true, then for STO module type we only allow the module if it is set, if it is not set we only allow the owner
     // for other _moduleType we allow both issuer and module.
@@ -495,45 +489,6 @@ contract SecurityToken is ISecurityToken, ReentrancyGuard, RegistryUpdater {
             return isForceValid ? true : (isInvalid ? false : isValid);
       }
       return false;
-    }
-
-    /**
-     * @notice Force transfer from token holder to reserve address due to court order or lost funds.
-     * @dev The only reason this transfer should fail is if balance of _from is less than _amount.
-     * @param _from Address from which the tokens are taken.
-     * @param _amount Amount of tokens to take.
-     * @param _data Data attached to the forced transfer which is logged in the event.
-     * TODO: check if it is ok not to call `verifyTransfer()`.
-     * TODO: modify security token version.
-     * TODO: add test cases.
-     */
-    function forceTransfer(address _from, uint256 _amount, bytes32 _data) public onlyOwner {
-        require(allowsForcedTransfers);
-        allowed[_from][msg.sender] = allowed[_from][msg.sender].add(_amount);
-        adjustInvestorCount(_from, forcedTransferReceiver, _amount);
-        adjustBalanceCheckpoints(_from);
-        adjustBalanceCheckpoints(forcedTransferReceiver);
-        require(super.transferFrom(_from, forcedTransferReceiver, _amount));
-        emit LogForcedTransfer(_from, forcedTransferReceiver, _amount, _data);
-    }
-
-    /**
-     * @notice Enable force transfers.
-     * @dev Enabling forced transfers cannot be undone.
-     * @param _receiver Address to which the tokens are forwarded.
-     */
-    function enableForceTransfer(address _receiver) public onlyOwner {
-        allowsForcedTransfers = true;
-        forcedTransferReceiver = _receiver;
-    }
-
-    /**
-     * @notice Change the receiving address of the forced transfers.
-     * @param _receiver Address to which the tokens are forwarded.
-     */
-    function modifyForceTransferReceiver(address _receiver) public onlyOwner {
-        require(allowsForcedTransfers);
-        forcedTransferReceiver = _receiver;
     }
 
     /**
